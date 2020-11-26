@@ -42,7 +42,6 @@ function Processor:Create()
 
 
 	t.IMP = function()
-
 		t.fetched = t.a;
 		return 0;
 	end;
@@ -192,7 +191,7 @@ function Processor:Create()
 		if(t.lookup[t.opcode+1].addrmode==t.IMP)then
 			t.a = bitAnd(temp, 0x00FF);
 		else
-			t:Write(addr_abs, bitAnd(temp, 0x00FF));
+			t:Write(t.addr_abs, bitAnd(temp, 0x00FF));
 		end
 		return 0;
 	end;
@@ -346,7 +345,7 @@ function Processor:Create()
 		local temp = t.a+t.fetched+t:GetFlag(Processor.FLAGS6502.C);
 		t:SetFlag(Processor.FLAGS6502.C, temp>255);
 		t:SetFlag(Processor.FLAGS6502.Z, bitAnd(temp, 0x00FF)==0);
-		t:SetFlag(Processor.FLAGS6502.V, bitAnd(bitNot(bitXor(t.a, t.fetched)), bitXor(t.a, t.temp), 0x0080));
+		t:SetFlag(Processor.FLAGS6502.V, bitAnd(bitNot(bitXor(t.a, t.fetched)), bitXor(t.a, temp), 0x0080));
 		t:SetFlag(Processor.FLAGS6502.N, bitAnd(temp, 0x80));
 		t.a = bitAnd(temp, 0x00FF);
 		return 1;
@@ -547,7 +546,7 @@ function Processor:Create()
 		if(t.lookup[t.opcode+1].addrmode==t.IMP)then
 			t.a = bitAnd(t.temp, 0x00FF);
 		else
-			t:Write(addr_abs, bitAnd(temp, 0x00FF));
+			t:Write(t.addr_abs, bitAnd(temp, 0x00FF));
 		end
 		return 0;
 	end;
@@ -559,6 +558,7 @@ function Processor:Create()
 			t.opcode==0x7C or
 			t.opcode==0xDC or
 			t.opcode==0xFC)then
+			print("Illegal");
 			return 1;
 		end
 		return 0;
@@ -598,7 +598,7 @@ function Processor:Create()
 		if(t.lookup[t.opcode+1].addrmode==t.IMP)then
 			t.a = bitAnd(temp, 0x00FF);
 		else
-			t:Write(addr_abs, bitAnd(temp, 0x00FF));
+			t:Write(t.addr_abs, bitAnd(temp, 0x00FF));
 		end
 		return 0;
 	end;
@@ -614,7 +614,7 @@ function Processor:Create()
 		if(t.lookup[t.opcode+1].addrmode==t.IMP)then
 			t.a = bitAnd(temp, 0x00FF);
 		else
-			t:Write(addr_abs, bitAnd(temp, 0x00FF));
+			t:Write(t.addr_abs, bitAnd(temp, 0x00FF));
 		end
 		return 0;
 	end;
@@ -642,17 +642,17 @@ function Processor:Create()
 	end;	
 
 	t.STA = function()
-		t:Write(addr_abs, t.a);
+		t:Write(t.addr_abs, t.a);
 		return 0;
 	end;
 
 	t.STX = function()
-		t:Write(addr_abs, t.x);
+		t:Write(t.addr_abs, t.x);
 		return 0;
 	end;
 	
 	t.STY = function()
-		t:Write(addr_abs, t.y);
+		t:Write(t.addr_abs, t.y);
 		return 0;
 	end;
 
@@ -690,6 +690,12 @@ function Processor:Create()
 		t.a = t.y;
 		t:SetFlag(Processor.FLAGS6502.Z, t.a==0x00);
 		t:SetFlag(Processor.FLAGS6502.N, bitAnd(t.a, 0x80));
+		return 0;
+	end;
+	t.DEY = function()
+		t.y = t.y-1;
+		t:SetFlag(Processor.FLAGS6502.Z, t.y==0x00);
+		t:SetFlag(Processor.FLAGS6502.N, bitAnd(t.y, 0x80));
 		return 0;
 	end;
 
@@ -750,12 +756,14 @@ end
 
 function Processor:Clock()
 	if(self.cycles==0)then
-		self.opcode = self:Read(self.pc)+1;
+		self.opcode = self:Read(self.pc);
 		self.pc = self.pc+1;
-		self.cycles = self.lookup[self.opcode].cycles;
+		local lookup_res = self.lookup[self.opcode+1];
+		print(lookup_res.name.."");
+		self.cycles = self.lookup[self.opcode+1].cycles;
 
-		local additional_cycle1 = self.lookup[self.opcode].addrmode();
-		local additional_cycle2 = self.lookup[self.opcode].operate();
+		local additional_cycle1 = self.lookup[self.opcode+1].addrmode();
+		local additional_cycle2 = self.lookup[self.opcode+1].operate();
 
 		--print(additional_cycle1);
 
@@ -857,9 +865,9 @@ function Processor:Disassemble(nStart, nStop)
 
 		if(self.lookup[_opcode+1].addrmode==self.IMP)then
 			sInst = sInst.." {IMP}";
-		elseif(self.lookup[_opcode+1].addrmode==self.IMN)then
+		elseif(self.lookup[_opcode+1].addrmode==self.IMM)then
 			value = self.bus:Read(addr,true); addr = addr+1;
-			sInst = sInst.."$"..hex(lo, 2).." {IMN}";
+			sInst = sInst.."$"..hex(lo, 2).." {IMM}";
 		elseif(self.lookup[_opcode+1].addrmode==self.ZP0)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = 0x00;
@@ -896,16 +904,12 @@ function Processor:Disassemble(nStart, nStop)
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = self.bus:Read(addr,true); addr = addr+1;
 			sInst = sInst.."$"..hex(bitOr(bitLShift(hi, 8), lo), 4).." {IND}";
-		elseif(self.lookup[_opcode+1].addrmode==self.IND)then
+		elseif(self.lookup[_opcode+1].addrmode==self.REL)then
 			value = self.bus:Read(addr,true); addr = addr+1;
-			sInst = sInst.."$"..hex(value, 2).." [$"..hex(addr+value, 4).."] {IND}";
+			sInst = sInst.."$"..hex(value, 2).." [$"..hex(addr+value, 4).."] {REL}";
 		end
 
 		mapLines[line_addr+1] = sInst;
 	end
 	return mapLines;
-end
-
-function hex(n, d)
-	return string.format("%x", n * 255);
 end
