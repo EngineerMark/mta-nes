@@ -253,7 +253,7 @@ function Processor:Create()
 	end;
 
 	t.BNE = function()
-		if(t:GetFlag(Processor.FLAGS6502.Z)==1)then
+		if(t:GetFlag(Processor.FLAGS6502.Z)==0)then
 			t.cycles = t.cycles+1;
 			t.addr_abs = t.pc+t.addr_rel;
 
@@ -263,7 +263,7 @@ function Processor:Create()
 
 			t.pc = t.addr_abs;
 		end
-		return 1;
+		return 0;
 	end;
 
 	t.BPL = function()
@@ -757,10 +757,13 @@ end
 function Processor:Clock()
 	if(self.cycles==0)then
 		self.opcode = self:Read(self.pc);
+		self:SetFlag(Processor.FLAGS6502.U, true);
 		self.pc = self.pc+1;
-		local lookup_res = self.lookup[self.opcode+1];
-		print(lookup_res.name.."");
+
 		self.cycles = self.lookup[self.opcode+1].cycles;
+
+		--local lookup_res = self.lookup[self.opcode+1];
+		--print(lookup_res.name.."");
 
 		local additional_cycle1 = self.lookup[self.opcode+1].addrmode();
 		local additional_cycle2 = self.lookup[self.opcode+1].operate();
@@ -768,24 +771,26 @@ function Processor:Clock()
 		--print(additional_cycle1);
 
 		self.cycles = self.cycles+(bitAnd(additional_cycle1, additional_cycle2));
+
+		self:SetFlag(Processor.FLAGS6502.U, true);
 	end
 
 	self.cycles = self.cycles-1;
 end
 
 function Processor:Reset()
-	self.a = 0;
-	self.x = 0;
-	self.y = 0;
-	self.stkp = 0xFD;
-	self.status = bitOr(0x00, Processor.FLAGS6502.U);
-
 	self.addr_abs = 0xFFFC;
 	local lo = self:Read(self.addr_abs+0);
 	local hi = self:Read(self.addr_abs+1);
 
 	self.pc = bitOr(bitLShift(hi, 8), lo);
 
+	self.a = 0;
+	self.x = 0;
+	self.y = 0;
+
+	self.stkp = 0xFD;
+	self.status = bitOr(0x00, Processor.FLAGS6502.U);
 	self.addr_rel = 0x0000;
 	self.addr_abs = 0x0000;
 	self.fetched = 0x00;
@@ -854,62 +859,64 @@ function Processor:Disassemble(nStart, nStop)
 	local mapLines = {};
 	local line_addr = 0;
 
-	while(addr<=nStop)do
+	while(addr<=nStop+1)do
 		line_addr = addr;
 
 		local sInst = "$"..hex(addr, 4)..": ";
 
 		local _opcode = self.bus:Read(addr, true);
 		addr = addr+1;
-		sInst = sInst..(self.lookup[_opcode+1].name).." ";
+		local lookupId = _opcode+1;
+		sInst = sInst..(self.lookup[lookupId].name).." ";
+
 
 		if(self.lookup[_opcode+1].addrmode==self.IMP)then
 			sInst = sInst.." {IMP}";
-		elseif(self.lookup[_opcode+1].addrmode==self.IMM)then
+		elseif(self.lookup[lookupId].addrmode==self.IMM)then
 			value = self.bus:Read(addr,true); addr = addr+1;
-			sInst = sInst.."$"..hex(lo, 2).." {IMM}";
-		elseif(self.lookup[_opcode+1].addrmode==self.ZP0)then
+			sInst = sInst.."#$"..hex(lo, 2).." {IMM}";
+		elseif(self.lookup[lookupId].addrmode==self.ZP0)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = 0x00;
 			sInst = sInst.."$"..hex(lo, 2).." {ZP0}";
-		elseif(self.lookup[_opcode+1].addrmode==self.ZPX)then
+		elseif(self.lookup[lookupId].addrmode==self.ZPX)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = 0x00;
 			sInst = sInst.."$"..hex(lo, 2).." X {ZPX}";
-		elseif(self.lookup[_opcode+1].addrmode==self.ZPY)then
+		elseif(self.lookup[lookupId].addrmode==self.ZPY)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = 0x00;
 			sInst = sInst.."$"..hex(lo, 2).." Y {ZPY}";
-		elseif(self.lookup[_opcode+1].addrmode==self.IZX)then
+		elseif(self.lookup[lookupId].addrmode==self.IZX)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = 0x00;
 			sInst = sInst.."($"..hex(lo, 2)..", X) {IZX}";
-		elseif(self.lookup[_opcode+1].addrmode==self.IZY)then
+		elseif(self.lookup[lookupId].addrmode==self.IZY)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = 0x00;
 			sInst = sInst.."($"..hex(lo, 2)..", Y) {IZY}";
-		elseif(self.lookup[_opcode+1].addrmode==self.ABS)then
+		elseif(self.lookup[lookupId].addrmode==self.ABS)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = self.bus:Read(addr,true); addr = addr+1;
 			sInst = sInst.."$"..hex(bitOr(bitLShift(hi, 8), lo), 4).." {ABS}";
-		elseif(self.lookup[_opcode+1].addrmode==self.ABX)then
+		elseif(self.lookup[lookupId].addrmode==self.ABX)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = self.bus:Read(addr,true); addr = addr+1;
 			sInst = sInst.."$"..hex(bitOr(bitLShift(hi, 8), lo), 4)..", Y {ABX}";
-		elseif(self.lookup[_opcode+1].addrmode==self.ABY)then
+		elseif(self.lookup[lookupId].addrmode==self.ABY)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = self.bus:Read(addr,true); addr = addr+1;
 			sInst = sInst.."$"..hex(bitOr(bitLShift(hi, 8), lo), 4)..", Y {ABY}";
-		elseif(self.lookup[_opcode+1].addrmode==self.IND)then
+		elseif(self.lookup[lookupId].addrmode==self.IND)then
 			lo = self.bus:Read(addr,true); addr = addr+1;
 			hi = self.bus:Read(addr,true); addr = addr+1;
 			sInst = sInst.."$"..hex(bitOr(bitLShift(hi, 8), lo), 4).." {IND}";
-		elseif(self.lookup[_opcode+1].addrmode==self.REL)then
+		elseif(self.lookup[lookupId].addrmode==self.REL)then
 			value = self.bus:Read(addr,true); addr = addr+1;
 			sInst = sInst.."$"..hex(value, 2).." [$"..hex(addr+value, 4).."] {REL}";
 		end
 
-		mapLines[line_addr+1] = sInst;
+		mapLines[line_addr] = sInst;
 	end
 	return mapLines;
 end

@@ -8,7 +8,7 @@ function Start()
 	local testCode = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
 	local nOffset = 0x8000;
 	local testCodeArray = split(testCode, " ");
-	print(testCodeArray[2]);
+	--print(testCodeArray[2]);
 	for i=1,#testCodeArray do
 		nes.ram[nOffset] = tonumber(testCodeArray[i], 16);
 		nOffset = nOffset+1;
@@ -22,6 +22,7 @@ function Start()
 
 	nes.Processor:Reset();
 
+	--DrawCode(350, 200, 26);
 	addEventHandler("onClientRender",getRootElement(),Render);
 end
 addEventHandler("onClientResourceStart", resourceRoot, Start);
@@ -32,7 +33,7 @@ function Render()
 			nes.Processor:Clock();
 		until(not nes.Processor:Complete())
 	end
-
+--
 	if(getKeyState("r"))then
 		nes.Processor:Reset();
 	end
@@ -63,10 +64,17 @@ function DrawRam(x, y, nAddr, nRows, nColumns)
 	end
 end
 
+function DrawCpu(x, y)
+	local status = "STATUS: ";
+	dxDrawText("STATUS: ", x, y, 10000, 10000, tocolor(255,255,255,255));
+end
+
+local check = true;
 function DrawCode(x, y, nLines)
+	if(not check)then return end;
 	local checkAddr = nes.Processor.pc;
 	local it_a = map[checkAddr];
-	local nLineY = bitRShift(nLines, 1)*10+y;
+	local nLineY = bitRShift(nLines, 1)*12+y;
 	if(it_a~=map[#map])then
 		if(it_a~=nil)then
 			dxDrawText(it_a, x, nLineY, 10000, 10000, tocolor(0, 255, 221, 255));
@@ -75,9 +83,10 @@ function DrawCode(x, y, nLines)
 			nLineY = nLineY+12;
 			checkAddr = checkAddr+1;
 			it_a = map[checkAddr];
-			if(checkAddr~=#map)then
+			if(map[checkAddr])then
 				if(it_a==nil)then
-					--print(checkAddr.." is nil");
+					check = false;
+					print("it_a equals nil on the "..checkAddr);
 				else
 					dxDrawText(it_a, x, nLineY, 10000, 10000, tocolor(255,255,255,255));
 				end
@@ -88,14 +97,15 @@ function DrawCode(x, y, nLines)
 	checkAddr = nes.Processor.pc;
 	it_a = map[checkAddr];
 	nLineY = bitRShift(nLines, 1)*10+y;
-	if(it_a~=map[#map])then
+	if(it_a~=map[#map+1])then
 		while(nLineY>y)do
 			nLineY = nLineY-12;
 			checkAddr = checkAddr-1;
 			it_a = map[checkAddr];
-			if(checkAddr~=#map)then
+			if(map[checkAddr])then
 				if(it_a==nil)then
-					--print(checkAddr.." is nil");
+					check = false;
+					print("it_a equals nil on the "..checkAddr);
 				else
 					dxDrawText(it_a, x, nLineY, 10000, 10000, tocolor(255,255,255,255));
 				end
@@ -103,8 +113,26 @@ function DrawCode(x, y, nLines)
 		end
 	end
 
+	if(not check)then
+		dump("mapDump.json",map);
+		dump("ramDump.json",nes.ram);
+		print("Errors. Created dump file of map and ram");
+	end
 end
 
 function hex(n, d)
     return ("%0"..d.."x"):format(n);
+end
+
+function dump(file, data)
+	local dumpString = toJSON(data, false, "tabs");
+	local f = nil;
+	if(not fileExists(file))then
+		f = fileCreate(file);
+	else
+		f = fileOpen(file, false);
+	end
+	fileWrite(f, dumpString);
+	fileFlush(f);
+	fileClose(f);
 end

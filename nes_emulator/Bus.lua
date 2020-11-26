@@ -8,7 +8,7 @@ function Bus:Create(processor)
 
 	-- 64Kb ram
 	t.ram = {};
-	for i=0,64*1024-1 do
+	for i=0,0xFFFF do
 		t.ram[i] = 0x00;
 	end
 
