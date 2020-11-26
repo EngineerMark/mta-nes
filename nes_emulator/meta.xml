@@ -1,0 +1,9 @@
+<meta>
+  <info name="NES Emulator" author="lecc" version="1.0"></info>
+
+  <script src="Bit.lua" type="client" cache="false" />
+
+  <script src="Processor.lua" type="client" cache="false" />
+  <script src="Bus.lua" type="client" cache="false" />
+  <script src="ClientMain.lua" type="client" cache="false" />
+</meta>
